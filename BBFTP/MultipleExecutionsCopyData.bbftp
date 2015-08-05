@@ -1,0 +1,150 @@
+#!/bin/bash
+
+#Author: Stefanos I. Georgiou 
+#emial address: stefanos1316@gmail.com
+
+#This script was created in case if a user would like to execute multiple executions of CopyData.[UtilityName]
+#All the results will be stored in a file assigent by the user and the directories will have ending with the
+#parameter names.
+
+#User can give parameters while executing this script
+#Parameters name list
+# $1 -> DirectoryNamePath where all the log files from the different executions will be stored
+# $2 -> User can select what the measurements will be about "-p" for parallel streams -w for window size or user can
+#	also give the argument -pwl => parallel streams, windowsz , list form (list form means user can add specific
+#	values for parallel streams and windowsz) -pwr => parallel streams, windowsz. range form (range means user can
+#	specify range of numbers like 1:10 )
+# $3 -> In case user  will select -p or -w at $2 means that $3 can be -l(list form) or -r(range form), if user for $2 will
+#	give -pwl or -pwr then $3 will be a list form or range form for the parallel streams
+# $4 -> Is the value of the parameters or if $2 is -pwl or pwr $4 will be the list or range form for the window size
+# $5 -> SourceDirectory same as in CopyData.bbftp
+# $6 -> RemoteUser + RemoteHost same as in CopyData.bbftp (ex root@192.168.1.20)
+# $7 -> DestinationDirectory as in CopyData.bbftp (/dev/null recommended)
+# $8 -> Comments as in CopyData.bbftp
+
+#Turn off swap memory
+swapoff="$(swapoff -a)"
+eval=$swapoff
+
+#Get title for the graphs
+IFS='/' read -ra list <<< "$5"
+datasetSize=${list[@]:(-1)}
+
+echo "Create Different Configuration Files for BBFTP..."
+
+#Creating new Directory for the log files
+bbftpLogDirDate="$(date -u | sed -e 's/ /_/g')" 
+bbftpLogDirName=$1/BBFTP_ALL_LOG_FILES_$bbftpLogDirDate
+bbftpLogDirCreate="$(mkdir -p $bbftpLogDirName)"
+eval=$bbftpLogDirCreate
+echo "Log Directory $bbftpLogDirName is created"
+
+#Create new Directory for the configuration files
+bbftpDirName="$(date -u | sed -e 's/ /_/g')"
+bbftpFullPath=BBFTP_CONFIG_DIR_$bbftpDirName
+bbftpDir="$(mkdir $bbftpFullPath)"
+eval=$bbftpDir
+
+#In case user is wish to compare different arguments combined the parallel streams and the window size
+if [[ "$2" == "-p"* ]] && [[ "$2" == *"w"* ]]; then #outer
+	#inner 1 START
+	if [[ "$2" == *"l" ]]; then
+		#Extract results for parallel streams
+		IFS="," read -a list_streams <<< "$3"
+		for i in "${list_streams[@]}"; do
+			#for each parallel streams a directory will be created and
+			# inside many different windows size will be added (N streams dir -> 1...N windowsz)
+			
+				newDirectory=$bbftpLogDirName/"BBFTP_LOG_FILES_streams_"$i
+                                createDir="$(mkdir -p $newDirectory)"
+                                eval=$createDir
+                                echo "$newDirectory directory created" 
+
+			#Second for loop which will extract results for the window size
+			IFS="," read -a list_windowsz <<< "$4" 
+			for j in "${list_windowsz[@]}"; do
+				tempName=bbftp_configuration_file_streams_$i
+				bbftpFileName="bbftp_configuration_file_streams_"$i"_windowsz_"$j
+				echo "$bbftpFileName configuration file created"
+				echo "--force" >> $bbftpFullPath/$bbftpFileName
+				echo "--streams $i" >> $bbftpFullPath/$bbftpFileName
+				echo "--windowsz $j" >> $bbftpFullPath/$bbftpFileName
+				echo "Transferring data..."
+				path=$bbftpFullPath/$bbftpFileName
+				execution="$(./CopyData.bbftp $path $newDirectory $5 $6 $7 $8)"
+				eval=$execution
+				#after execution clear all buffers
+				clearMemory="$(free && sync && echo 3 > /proc/sys/vm/drop_caches && free )"
+				eval=$clearMemory
+			done
+			#After finishing the executions transfer createData and plotGraphs and execute them
+			copyCreateData="$(cp createData.bbftp $newDirectory)"
+			copyModifyFile="$(cp modifyFile.bbftp $newDirectory)"
+			copyPlotGraphs="$(cp plotGraphs.bbftp $newDirectory)"
+			eval=$copyCreateData
+			eval=$copyModifyFile
+			eval="copyPlotGraphs"
+		done
+	else 
+		#inner 2 START
+		if [[ "$2" == *"r" ]]; then
+			#Extract resutls for parallel streams
+			IFS=":" read -a list_streams <<< "$3"
+			for i in `seq ${list_streams[0]} ${list_streams[1]}`; do
+				#for each execution create a new directory so for different parallel streams
+				#we are going to have many windowsz (N streams directory -> 1...N windowsz)
+					
+				newDirectory=$bbftpLogDirName/"BBFTP_LOG_FILES_streams_"$i
+				createDir="$(mkdir -p $newDirectory)"	
+				eval=$createDir
+				echo "$newDirectory directory created"
+				
+				#Second for loop which will extract results for the window size
+				IFS=":" read -a list_windowsz <<< "$4"
+				for j in `seq ${list_windowsz[0]} ${list_windowsz[1]}`; do
+					tempName=bbftp_configuration_file_streams_$i
+                               	 	bbftpFileName="bbftp_configuration_file_streams_"$i"_windowsz_"$j
+                                	echo "$bbftpFileName configuration file created"
+					echo "--force" >> $bbftpFullPath/$bbftpFileName
+                                	echo "--streams $i" >> $bbftpFullPath/$bbftpFileName
+                                	echo "--windowsz $(($j*10000000))" >> $bbftpFullPath/$bbftpFileName
+                                	echo "Transferring data..."
+                                	path=$bbftpFullPath/$bbftpFileName
+                               	 	execution="$(./CopyData.bbftp $path $newDirectory $5 $6 $7 $8)"
+                                	eval=$execution
+					#after execution clear all buffers
+        	                        clearMemory="$(free && sync && echo 3 > /proc/sys/vm/drop_caches && free )"
+	                                eval=$clearMemory
+				done
+				#After finishing the executions transfer createData and plotGraphs and execute them
+	                        copyCreateData="$(cp createData.bbftp $newDirectory)"
+				copyModifyFile="$(cp modifyFile.bbftp $newDirectory)"
+                        	copyPlotGraphs="$(cp plotGraphs.bbftp $newDirectory)"
+                       	 	eval=$copyCreateData
+				eval=$copyModifyFile
+                        	eval="copyPlotGraphs"
+			done
+		fi #inner 2 END
+	fi #inner 1 END
+fi #outer END
+
+#Now exctract results from the log files and store them in a file to plot graphs
+#Move the createData.bbftp at the log file to create the plot data
+copyCreateData="$(cp createData.bbftp $bbftpLogDirName)"
+copyPlotGraphs="$(cp plotGraphs.bbftp $bbftpLogDirName)"
+copyModifyData=$(cp modifyFile.bbftp $bbftpLogDirName)
+eval=$copyCreateData
+eval=$copyPlotGraphs
+eval=$copyModifyData
+
+#Plot data with gnuplot
+#executePlotGraphs="$(./plotGraphs.bbftp $datasetSize)"
+#eval=$executePlotGraphs
+echo "Plotting graphs"
+
+#Removing all configuration files which was created for to execute utilities with different parameters
+echo "Removing all configuration files..."
+removeConfigFiles="$(rm -r -f "BBFTP_CONFIG_"*)"
+eval=$removeConfigFiles
+
+

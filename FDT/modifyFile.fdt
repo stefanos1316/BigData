@@ -1,0 +1,30 @@
+#!/bin/bash
+c=0
+declare -a myArray
+
+while read line
+do
+	myArray[$c]=$line
+	c=$(expr $c + 1 )	
+	echo $line
+done < plot_data.txt
+
+for i in `seq 0 8`
+do
+	temp=$(expr $i + 9 ) #1
+	temp2=$(expr $temp + 9 ) #2
+	temp4=$(expr $temp2 + 9 ) #4
+	temp8=$(expr $temp4 + 9 ) #8
+	temp16=$(expr $temp8 + 9 ) #16
+	temp32=$(expr $temp16 + 9 ) #32
+	temp64=$(expr $temp32 + 9 ) #64
+	IFS=' ' read -a array_1 <<< ${myArray[$temp]}
+	IFS=' ' read -a array_2 <<< ${myArray[$temp2]}
+	IFS=' ' read -a array_4 <<< ${myArray[$temp4]}
+	IFS=' ' read -a array_8 <<< ${myArray[$temp8]}
+	IFS=' ' read -a array_16 <<< ${myArray[$temp16]}
+	IFS=' ' read -a array_32 <<< ${myArray[$temp32]}
+	IFS=' ' read -a array_64 <<< ${myArray[$temp64]}
+	echo "${myArray[$i]} ${array_1[1]} ${array_2[1]} ${array_4[1]} ${array_8[1]}  ${array_16[1]}  ${array_32[1]}  ${array_64[1]}" >>./comperative_data.txt
+
+done

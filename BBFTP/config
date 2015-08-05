@@ -1,0 +1,5 @@
+setnbstream 10
+setbuffersize 4096
+setrecvwinsize 4096
+setsendwinsize 4096
+-D5022:5040

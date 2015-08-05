@@ -1,0 +1,279 @@
+#!/bin/bash
+#set -x
+#--------------------------------------------------------------------------
+#
+# Usage: CopyData.bbcp  BBCPConfig BaseDir SourceDirectory [RemoteUser@]RemoteHost DestinationDirectory [Comments]
+#
+# the script is designed to  test copying  bigdata from local host to remote host
+# using utility BBCP
+#
+# Creation date: Sun Jun 15 12:06:01 MSK 2014
+# by Anatoly  Oreshkin   email:  anatoly.oreshkin@gmail.com
+#---------------------------------------------------------------------------
+# History of changes:
+# 14.08.2014 RemoteUser added
+#
+#----------------------------------------------------------------------------
+
+
+# function to calculate  files size dispersion
+
+calc_dispersion () 
+{
+# calculate dispersion
+
+# number of files in ${SourceDirectory} 
+NoFiles=`ls -1 ${SourceDirectory} | wc -l`
+# calculate total size of all files in  ${SourceDirectory}
+sum=0
+
+for i in `ls -lk ${SourceDirectory}|grep -v "total" | awk '{print $5}'`
+
+   do
+     sum=`expr ${sum} + ${i}`
+   done
+# calculate average  file size
+
+AverageFileSize=`expr ${sum} / ${NoFiles}`
+sum2=0
+#  calculate dispersion
+for i in `ls -lk ${SourceDirectory}|grep -v "total"|awk '{print $5}'`
+ do
+    DIFF=`expr ${i} - ${AverageFileSize}`
+    DIFF2=`expr ${DIFF} \* ${DIFF}`
+    sum2=`expr ${sum2} + ${DIFF2}`
+ done
+FileSizeDispersion=`expr ${sum2} / ${NoFiles}`
+
+}
+#--------------------------------------------------------------
+#
+#  main part of  the script
+#
+#--------------------------------------------------------------
+LOCAL_HOST=`hostname`
+LOCAL_USER=`whoami`
+#
+#  check  command line parameters
+#
+
+
+if [ "$#" -lt 5 ]; then
+
+    cat <<END
+------------------------------------------------------------------------------------------------------------
+     the script is designed to  test copying  bigdata from local host to remote host using utility BBCP
+
+  Usage: $0   <bbcp_config_file> <BaseDir> <SourceDirectory> [<RemoteUser>@]<RemoteHost> <DestinationDirectory/dev/null> [<Comments>]
+
+               bbcp_config_file  -- bbcp configuration file for tuning bbcp, may be empty
+               BaseDir -- directory where to write transfer proccess logging information
+               SourceDirectory -- directory/single file  on local host to be transferred
+               RemoteUser -- destination remote user, if omitted local user selected
+               RemoteHost -- destination remote host name
+               DestinationDirectory -- destination directory on RemoteHost or /dev/null
+               Comments -- comments 
+ ------------------------------------------------------------------------------------------------------------
+END
+   exit 1
+fi
+
+LOG_FILE=/tmp/bbcp-Log-`date +"%Y-%m-%d_%H:%M:%S"`
+(
+BBCPConfig=$1
+BASE_DIR=$2
+SourceDirectory=$3
+# REMOTE_USER@REMOTE_HOST   $4
+# check if REMOTE_USER specified
+REMOTE_HOST=`echo $4 | awk -F"@" '{print $2}'`
+if [ -z ${REMOTE_HOST} ]; then
+  REMOTE_HOST=$4
+  REMOTE_USER=${LOCAL_USER}
+else
+  REMOTE_USER=`echo $4 | awk -F"@" '{print $1}'`
+  REMOTE_HOST=`echo $4 | awk -F"@" '{print $2}'`
+fi
+
+DestinationDirectory=$5
+shift; shift; shift; shift; shift;  
+comments="$@"  
+
+
+# directory size
+DirSize=`du -s ${SourceDirectory}  | awk '{print $1}'`
+
+# number of files
+NoFiles=`ls -1 ${SourceDirectory} | wc -l`
+
+# average file size
+AverageFileSize=0
+
+# File size dispersion
+FileSizeDispersion=0
+
+# calculate files size dispersion
+calc_dispersion
+
+# file with  list of files to be transferred
+FileList=/tmp/bbcp$$
+
+find ${SourceDirectory} -type f -print > ${FileList}
+
+#Added by Stefanos
+param="$(cat ${BBCPConfig})"
+parame="$(echo $param | sed 's/--//g')"
+parameter="$(echo $parame | sed -e 's/ /_/g')"
+
+# subdirectory to write  logging  information
+SUB_BASE_DIR=${BASE_DIR}/`basename ${0}`.${LOCAL_HOST}.${REMOTE_HOST}.`date +"%Y-%m-%d_%H:%M:%S"`.${parameter}
+
+#SOSREPORT=${SUB_BASE_DIR}/SOSREPORT.${LOCAL_HOST}
+PING=${SUB_BASE_DIR}/PING.${LOCAL_HOST}.${REMOTE_HOST}
+TRACEROUTE=${SUB_BASE_DIR}/TRACEROUTE.${LOCAL_HOST}.${REMOTE_HOST}
+COMMENTS=${SUB_BASE_DIR}/COMMENTS.${LOCAL_HOST}.${REMOTE_HOST}
+ABSTRACT=${SUB_BASE_DIR}/ABSTRACT.${LOCAL_HOST}.${REMOTE_HOST}
+LOG=${SUB_BASE_DIR}/LOG.BBCP.${LOCAL_HOST}.${REMOTE_HOST}
+
+#
+# Parameters of BBCP
+#
+#
+# -s strms sets the number of parallel network streams to be used for the transfer. The default is 4
+#
+#
+# Window auto-tuning is now supported as the default
+# The -w option supports a mechanism to defeat auto-tuning when so desired.
+#
+# 
+# -z | --reverse uses reverse connection protocol.
+#
+# Normally, bbcp source nodes will connect to their counterpart running on the target node. If the 
+# target host prohibits incoming connections, the copy will fail. However,
+# should the source host allow arbitrary connections, you can specify the -z option. This option 
+# reverses the connection protocol so that the bbcp sink node will always try to connect to its 
+# counterpart running on the source host.
+
+
+COMMAND_LINE="bbcp  --config ${BBCPConfig} -v -V --progress  2 -r  --nodns  --logfile ${LOG} \
+  ${SourceDirectory} ${REMOTE_USER}@${REMOTE_HOST}:${DestinationDirectory}"
+#  --infiles  ${FileList} ${REMOTE_USER}@${REMOTE_HOST}:${DestinationDirectory}"
+             
+
+
+#
+#  create subdirectory with name ScriptName.LocalHost.RemoteHost.DateTime
+# 
+
+echo 
+echo "Create subdirectory ${SUB_BASE_DIR} "
+echo
+if [ -d ${SUB_BASE_DIR} ]; then
+    echo "subdirectory ${SUB_BASE_DIR} already exist "
+    echo ""
+else 
+    if ( mkdir ${SUB_BASE_DIR} ); then
+       echo "subdirectory ${SUB_BASE_DIR} created successfully"
+       echo
+    else
+       echo "failed to create subdirectory ${SUB_BASE_DIR}"
+       echo
+       exit 1
+    fi
+fi 
+
+
+
+
+# comments
+
+echo $comments > ${COMMENTS}
+echo "bbcp tuning parameters:" >> ${COMMENTS}
+cat  ${BBCPConfig} >> ${COMMENTS}
+ 
+# fill in ABSTRACT content 
+echo "Start time = `date`" >> ${ABSTRACT}
+echo "Command line = ${COMMAND_LINE}" >> ${ABSTRACT}
+echo "Total data size to transfer(KB) = ${DirSize}" >> ${ABSTRACT}
+echo "Number of files = ${NoFiles}" >> ${ABSTRACT}
+echo "Source directory(or single file) with files = ${SourceDirectory}" >> ${ABSTRACT}
+echo "Average file size(KB) = ${AverageFileSize}" >> ${ABSTRACT}
+echo "File size dispersion = ${FileSizeDispersion}" >> ${ABSTRACT}
+echo "Local host name = ${LOCAL_HOST}" >> ${ABSTRACT}
+echo "Remote host name = ${REMOTE_HOST}" >> ${ABSTRACT}
+echo "Remote host directory = ${DestinationDirectory}" >> ${ABSTRACT}
+
+#
+#  transferring data to remote host
+#
+
+   cat <<END
+
+ Beginning  data  transfer to ${REMOTE_HOST} ...  
+ Start time =  `date`
+ Command line = ${COMMAND_LINE}
+ Local host name = ${LOCAL_HOST}
+ Source directory(or single file) with files = ${SourceDirectory} 
+ Total data size to transfer (KB) = ${DirSize}
+ Number of files = ${NoFiles}
+ Average file size (KB) = ${AverageFileSize}
+ File size dispersion = ${FileSizeDispersion}
+ Remote host name = ${REMOTE_HOST}
+ Remote host directory = ${DestinationDirectory}
+
+END
+
+STARTTIME=$(date +"%s")
+
+if ( ${COMMAND_LINE} ); then
+# data transfer success
+ ENDTIME=$(date +"%s")  
+ ELAPSEDTIME=$((${ENDTIME}-${STARTTIME}))
+ TransferRate=`expr ${DirSize} / ${ELAPSEDTIME}`
+
+ echo "Data size transferred (KB) = ${DirSize}" >> ${ABSTRACT}
+ echo " Data size transferred (KB)= ${DirSize}"
+ echo "End time = `date`">> ${ABSTRACT}
+ echo "Completion = YES" >> ${ABSTRACT}
+ echo "Average transfer speed (KB/sec) = ${TransferRate}" >> ${ABSTRACT}
+ echo " Average transfer speed (KB/sec) = ${TransferRate}" 
+ echo " Elapsed time  (sec) = ${ELAPSEDTIME}" 
+#
+ echo " Data transfer completed successfuly"
+else
+# data transfer failed
+ ENDTIME=$(date +"%s")
+ ELAPSEDTIME=$((${ENDTIME}-${STARTTIME}))
+ echo "Data size transferred (KB) = not available" >> ${ABSTRACT}
+ echo " Data size transferred (KB) = not available"
+ echo "End time = `date`" >> ${ABSTRACT}
+ echo "Completion = ABNORMAL" >> ${ABSTRACT}
+ echo " Data transfer completed abnormally"
+ echo " Elapsed time  (sec) = ${ELAPSEDTIME}"
+fi
+
+#
+# sosreport
+#
+#sosreport > ${SOSREPORT}
+
+echo " Creating sosreport ..."
+sosreport --batch --tmp-dir ${SUB_BASE_DIR} --name ${LOCAL_HOST}.${REMOTE_HOST}  > /dev/null 2>&1
+echo " Creating sosreport completed"
+
+# ping remote host
+echo " ping ${REMOTE_HOST} ..." 
+ping -c 10 ${REMOTE_HOST} > ${PING}
+
+# traceroute remote host
+echo " traceroute ${REMOTE_HOST} ..."
+traceroute ${REMOTE_HOST}  > ${TRACEROUTE}
+
+    cat <<END
+ End time =  `date`"
+
+ End of script $0"
+ The Log is available at ${LOG_FILE} "
+END
+
+) 2>& 1 | tee ${LOG_FILE}
+rm -f ${FileList}

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+	getFileAbstract="$(find . -name 'ABSTRACT*'|sort -k 2)"
+
+	for i in $getFileAbstract; do
+		takeAvgTransfSpd="$(grep 'Average transfer speed' $i | sort | awk '{print $NF}')"
+		takeParallelStreamsNum="$(grep '\-ss' $i | sort |  awk '{print $2}')"
+	
+		#Chech if the Parallel Streams Number are 2 digits or single(if its single it consits the char '_')
+		#if [[ $takeParallelStreamsNum == "_"* ]];
+		#then
+		#	takeParallelStreamsNum="$(grep 'bbcp_configuration_file' $i | awk '{print $6}' | tail -c 2)"	
+		#fi			
+		
+		#IFS=' ' read -a list <<< "$takeParallelStreamsNum"
+
+		#if [ $1 = "windowsz" ] && [ $2 = "range" ] ; then	
+		#echo $(($takeParallelStreamsNum*10000000))	$takeAvgTransfSpd>> ./plot_data.txt
+		#else
+		#if [ $1 = "windowsz" ]
+		echo $takeParallelStreamsNum
+		#temp=${list[@]:(-1)}
+		echo $takeParallelStreamsNum	$takeAvgTransfSpd >> ./plot_data.txt
+		#fi
+	done
