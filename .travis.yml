@@ -1,0 +1,8 @@
+language: python
+
+install: 
+- pip install requests[security]
+- sudo install pelican
+
+script:	
+- bash ./script.test
