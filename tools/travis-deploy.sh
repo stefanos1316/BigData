@@ -73,6 +73,8 @@ if [ -n "$DEBUG" ] ; then
   set -x
 fi
 
+ls -l
+ls -l ../
 chmod 600 deploy_key
 eval `ssh-agent -s`
 ssh-add deploy_key
