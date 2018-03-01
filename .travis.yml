@@ -3,7 +3,7 @@ language: python
 sudo: required
 dist: trusty
 
-script:	 bash toos/travis_deploy.sh
+script:	 bash tools/travis_deploy.sh
 
 env:
   global:
