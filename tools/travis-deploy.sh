@@ -44,7 +44,7 @@ rm -rf web/**/* || exit 0
 doCompile
 
 # Now let's go have some fun with the cloned repo
-cd web
+#cd web
 git config user.name "Travis CI"
 git config user.email "$COMMIT_AUTHOR_EMAIL"
 
@@ -67,12 +67,14 @@ ENCRYPTED_KEY_VAR="encrypted_${ENCRYPTION_LABEL}_key"
 ENCRYPTED_IV_VAR="encrypted_${ENCRYPTION_LABEL}_iv"
 ENCRYPTED_KEY=${!ENCRYPTED_KEY_VAR}
 ENCRYPTED_IV=${!ENCRYPTED_IV_VAR}
-openssl aes-256-cbc -K $encrypted_24f3b62cf69b_key -iv $encrypted_24f3b62cf69b_iv -in ../deploy_key.enc -out ../deploy_key -d
+openssl aes-256-cbc -K $encrypted_24f3b62cf69b_key -iv $encrypted_24f3b62cf69b_iv -in deploy_key.enc -out deploy_key -d
 
 if [ -n "$DEBUG" ] ; then
   set -x
 fi
 
+ls -l
+ls -l ../
 chmod 600 deploy_key
 eval `ssh-agent -s`
 ssh-add deploy_key
