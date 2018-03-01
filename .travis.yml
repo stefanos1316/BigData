@@ -1,8 +1,11 @@
 language: python
 
-install: 
-- pip install requests[security]
-- sudo pip install pelican
+sudo: required
+dist: trusty
 
-script:	
-- bash ./script.test
+script:	 bash toos/travis_deploy.sh
+
+env:
+  global:
+  - ENCRYPTION_LABEL: 24f3b62cf69b
+  - COMMIT_AUTHOR_EMAIL: stefanos1316@gmail.com
